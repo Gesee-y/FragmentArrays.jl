@@ -43,6 +43,8 @@ julia> print(a.data)
 [[1,2,3]]
 ```
 
+Getting data is an O(1) operation. The index first pass through a map to know in which fragment it belongs to, then is substrated by the fragment starting position to in the index in that fragment.
+
 ## License
 
 This package is under the MIT license. Feel free to do whatever you want with it.
