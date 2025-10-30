@@ -12,5 +12,9 @@ module FragmentArrays
 
 ## Core data structures
 include("core.jl")
+## Indexing
+include("indexing.jl")
+## Common operations
+include("operations.jl")
 
 end # module

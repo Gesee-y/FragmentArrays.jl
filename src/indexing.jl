@@ -17,6 +17,8 @@ function Base.setindex!(f::FragmentVector, v, i)
 	@inbounds f.data[blockid][i - f.offset[blockid]] = v
 end
 
+Base.size(f::FragmentVector) = (length(f),)
+Base.size(f::FragmentVector, i) = size(f)[i]
 
 function Base.iterate(f::FragmentVector)
 	state = f.offset[begin]+1

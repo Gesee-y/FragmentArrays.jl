@@ -36,9 +36,9 @@ function Base.insert!(f::FragmentVector, v, i)
 				blockid = _search_index(f.offset, i)
 				insert!(f.data, [v])
 				map[i] = blockid
-				@inbounds for i+1:length(map)
-					if !iszero(map[i])
-						map[i] += 1
+				@inbounds for j in i+1:length(map)
+					if !iszero(map[j])
+						map[j] += 1
 					end
 				end
 
@@ -104,7 +104,7 @@ function Base.insert!(f::FragmentVector, v, i)
 	end
 end 
 
-function Base.pop!(f:::FragmentVector)
+function Base.pop!(f::FragmentVector)
 	f.map[end] = 0
 	r = pop!(f.data[end])
 
@@ -129,7 +129,7 @@ function Base.deleteat!(f::FragmentVector, i)
 
 	if idx == 1
 		f.data[id] = f.data[id][2:end]
-	elseif idx = length(f.data[id])
+	elseif idx == length(f.data[id])
 		pop!(f.data[id])
 	else
 		v = f.data[id]
