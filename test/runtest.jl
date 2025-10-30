@@ -20,3 +20,18 @@ b = [1,2,3]
 
 @btime @inbounds $b[3]
 @btime @inbounds $a[3]
+
+@time a[6] = 5
+println(a.data)
+println(a.offset)
+println(a.map)
+
+deleteat!(a, 6)
+println(a.data)
+println(a.offset)
+println(a.map)
+
+@time deleteat!(a, 4)
+println(a.data)
+println(a.offset)
+println(a.map)

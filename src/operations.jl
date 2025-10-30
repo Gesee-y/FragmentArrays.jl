@@ -144,8 +144,8 @@ function Base.deleteat!(f::FragmentVector, i)
 		v = f.data[id]
 		vr = v[idx+1:end]
 		resize!(v, idx-1)
-		insert!(f.data, vr, id+1)
-		insert!(f.offset, id, id+1)
+		insert!(f.data, id+1, vr)
+		insert!(f.offset, id+1, id)
 	end
 
 	if isempty(f.data[id])
