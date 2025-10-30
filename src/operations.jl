@@ -68,6 +68,8 @@ function Base.insert!(f::FragmentVector, i, v)
 				offset = f.offset[right]
 
 				_fuse_block!(bl, br, map, left, offset)
+				_deleteat!(f.offset,right)
+				_deleteat!(f.data, right)
 			end
 		else
 			l = length(map)
@@ -206,7 +208,7 @@ end
 
 function _search_index(offset, i)
 	isempty(offset) && return 0
-	
+
 	center = length(offset) ÷ 2 + 1
 	res = 1
 	prev, next = 1, length(offset)

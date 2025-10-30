@@ -10,3 +10,7 @@ println(a.data)
 println(a.offset)
 println(a.map)
 println(a[3])
+a[4] = 3
+println(a.data)
+println(a.offset)
+println(a.map)
