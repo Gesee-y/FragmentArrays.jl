@@ -1,6 +1,7 @@
 include(joinpath("..", "src", "FragmentArrays.jl"))
 
 using .FragmentArrays
+using BenchmarkTools
 
 a = FragmentVector{Int}(undef, 10)
 
@@ -14,3 +15,8 @@ a[4] = 3
 println(a.data)
 println(a.offset)
 println(a.map)
+
+b = [1,2,3]
+
+@btime @inbounds $b[3]
+@btime @inbounds $a[3]
