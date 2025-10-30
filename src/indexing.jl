@@ -1,0 +1,37 @@
+################################################################################################################################################
+################################################################# INDEXING #####################################################################
+################################################################################################################################################
+
+function Base.getindex(f::FragmentVector, i)
+	blockid = f.map[i]
+	@boundscheck iszero(blockid) && throw(BoundError(f, i))
+	@inbounds return f.data[blockid][i - f.offset[blockid]]
+end
+
+function Base.setindex!(f::FragmentVector, v, i)
+	blockid = f.map[i]
+	if iszero(blockid)
+		return insert!(f, v, i)
+	end
+
+	@inbounds f.data[blockid][i - f.offset[blockid]] = v
+end
+
+
+function Base.iterate(f::FragmentVector)
+	state = f.offset[begin]+1
+	return (f.data[begin][state],state+1)
+end
+
+function Base.iterate(f::FragmentVector, state)
+	id = f.map[state]
+
+	if iszero(id)
+		id = id+1
+		id > length(f.data) && return nothing
+		state = f.offset[id] + 1
+	end
+	
+	return (f.data[id][state],state+1)
+end
+
