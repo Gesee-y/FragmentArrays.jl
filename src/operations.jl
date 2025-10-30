@@ -2,6 +2,8 @@
 ###################################################### OPERATIONS ###################################################
 #####################################################################################################################
 
+export prealloc_range, get_block, get_offset
+
 function Base.push!(f::FragmentVector, v)
     id = length(f.data)
 	push!(f.map, id)
@@ -34,7 +36,7 @@ function Base.insert!(f::FragmentVector, i, v)
 
 			if cl && cr
 				if isempty(f.offset) || f.offset[end] < i
-					map[i] = 1 + isempty(f.offset)*(length(f.offset))
+					map[i] = 1 + !isempty(f.offset)*(length(f.offset))
 					push!(f.offset, i-1)
 					push!(f.data, [v])
 				else
@@ -64,6 +66,7 @@ function Base.insert!(f::FragmentVector, i, v)
 				push!(block, v)
 			else
 				bl, br = f.data[left], f.data[right]
+				map[i] = left
 				push!(bl, v)
 				offset = f.offset[right]
 
@@ -145,7 +148,9 @@ function Base.deleteat!(f::FragmentVector, i)
 		vr = v[idx+1:end]
 		resize!(v, idx-1)
 		insert!(f.data, id+1, vr)
-		insert!(f.offset, id+1, id)
+		insert!(f.offset, id+1, i)
+
+		map[i+1:i+length(vr)] .= id+1
 	end
 
 	if isempty(f.data[id])
@@ -162,6 +167,7 @@ end
 
 function Base.resize!(f::FragmentVector, n)
 	l = length(f)
+	map = f.map
 
 	n == l && return
 	resize!(map, n)
@@ -188,7 +194,27 @@ function Base.length(f::FragmentVector)
 	return l
 end
 
+function prealloc_range(f::FragmentVector{T}, r::UnitRange) where T
+	blockid = max(_search_index(f.offset, r[begin]), 1)
+	last = r[end]
+	map = f.map
 
+	if last > length(map)
+		resize!(map, last)
+	end
+	map[r] .= blockid
+	insert!(f.data, blockid, Vector{T}(undef, length(r)))
+	insert!(f.offset, blockid, r[begin]-1)
+end
+
+function get_block(f::FragmentVector{T}, i) where T
+	id = f.map[i]
+	return f.data[id]
+end
+function get_offset(f::FragmentVector, i)
+	id = f.map[i]
+	return f.offset[id]
+end
 
 ###################################################### HELPERS ######################################################
 

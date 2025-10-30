@@ -21,7 +21,8 @@ b = [1,2,3]
 @btime @inbounds $b[3]
 @btime @inbounds $a[3]
 
-@time a[6] = 5
+@btime $a[6] = 5
+
 println(a.data)
 println(a.offset)
 println(a.map)
