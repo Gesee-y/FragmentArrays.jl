@@ -23,7 +23,7 @@ function Base.append!(f::FragmentVector, v)
 	append!(f.data[id], v)
 end
 
-function Base.insert!(f::FragmentVector, v, i)
+function Base.insert!(f::FragmentVector, i, v)
 	map = f.map
 	id = f.map[i]
 
@@ -33,13 +33,20 @@ function Base.insert!(f::FragmentVector, v, i)
 			cl,cr = iszero(left), iszero(right)
 
 			if cl && cr
-				blockid = _search_index(f.offset, i)
-				insert!(f.data, [v])
-				map[i] = blockid
-				@inbounds for j in i+1:length(map)
-					if !iszero(map[j])
-						map[j] += 1
-					end
+				if isempty(f.offset) || f.offset[end] < i
+					map[i] = 1 + isempty(f.offset)*(length(f.offset))
+					push!(f.offset, i-1)
+					push!(f.data, [v])
+				else
+				    blockid = _search_index(f.offset, i)
+				    insert!(f.data, blockid, [v])
+				    insert!(f.offset, blockid, i-1)
+				    map[i] = blockid
+				    @inbounds for j in i+1:length(map)
+					    if !iszero(map[j])
+						    map[j] += 1
+					    end
+				    end
 				end
 
 				return
@@ -98,8 +105,8 @@ function Base.insert!(f::FragmentVector, v, i)
 		end
 	else
 		id = map[i]
-		insert!(f.data[id], v, i)
-		insert!(map, id, i)
+		insert!(f.data[id], i, v)
+		insert!(map, i, id)
 		f.offset[id+1:end] .+= 1
 	end
 end 
@@ -198,11 +205,13 @@ function _fuse_block!(dest, src, map, dest_id, offset)
 end
 
 function _search_index(offset, i)
+	isempty(offset) && return 0
+	
 	center = length(offset) ÷ 2 + 1
 	res = 1
-	prev, next = center-1, center+1
+	prev, next = 1, length(offset)
 
-	while prev < next
+	while prev <= next
 		center = (prev + next)÷2
 		offs  = offset[center]
 		if offs == i
@@ -219,6 +228,8 @@ function _search_index(offset, i)
 		    return center
 		end
 	end
+
+	return prev
 end 
 
 function _deleteat!(v, i)

@@ -20,9 +20,9 @@ mutable struct FragmentVector{T} <: AbstractVector{T}
 
 	## Constructors
 
-	FragmentVector{T}(::UndefInitializer, n) where T = new{T}(Vector{T}[Vector{T}(undef, n)], fill(1, n), Int[0])
+	FragmentVector{T}(::UndefInitializer, n) where T = new{T}(Vector{T}[], fill(0, n), Int[])
 
-	FragmentVector{T}(args::T...) where T = new{T}(Vector{T}[T[args...]], fill(1, length(args)), Int[0])
+	FragmentVector{T}(args::T...) where T = new{T}(Vector{T}[T[args...]], fill(1, length(args)), Int[])
 	FragmentVector(args::T...) where T = FragmentVector{T}(args...)
 	FragmentVector{T}(args...) where T = FragmentVector{T}(convert.(T, args))
 end

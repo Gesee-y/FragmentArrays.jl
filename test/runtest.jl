@@ -2,6 +2,11 @@ include(joinpath("..", "src", "FragmentArrays.jl"))
 
 using .FragmentArrays
 
-a = FragmentVector(1,2,3)
+a = FragmentVector{Int}(undef, 10)
 
-println(a)
+a[5] = 1
+a[3] = 2
+println(a.data)
+println(a.offset)
+println(a.map)
+println(a[3])

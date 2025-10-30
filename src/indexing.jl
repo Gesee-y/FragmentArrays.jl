@@ -4,14 +4,14 @@
 
 function Base.getindex(f::FragmentVector, i)
 	blockid = f.map[i]
-	@boundscheck iszero(blockid) && throw(BoundError(f, i))
+	@boundscheck iszero(blockid) && throw(BoundsError(f, i))
 	@inbounds return f.data[blockid][i - f.offset[blockid]]
 end
 
 function Base.setindex!(f::FragmentVector, v, i)
 	blockid = f.map[i]
 	if iszero(blockid)
-		return insert!(f, v, i)
+		return insert!(f, i, v)
 	end
 
 	@inbounds f.data[blockid][i - f.offset[blockid]] = v
@@ -36,4 +36,3 @@ function Base.iterate(f::FragmentVector, state)
 	
 	return (f.data[id][state],state+1)
 end
-
