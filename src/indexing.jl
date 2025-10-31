@@ -36,21 +36,25 @@ end
 Base.size(f::FragmentVector) = (length(f),)
 Base.size(f::FragmentVector, i) = size(f)[i]
 
-function Base.iterate(f::FragmentVector)
-	state = f.offset[begin]+1
-	return (f.data[begin][state],state+1)
+function Base.iterate(f::FragmentVector{T}) where T
+    return _iterate_fragment(f, 1, 1)
 end
 
-function Base.iterate(f::FragmentVector, state)
-	id = f.map[state]
+function Base.iterate(f::FragmentVector{T}, block::Int, local::Int=1) where T
+    return _iterate_fragment(f, block, local)
+end
 
-	if iszero(id)
-		id = id+1
-		id > length(f.data) && return nothing
-		state = f.offset[id] + 1
-	end
-	
-	return (f.data[id][state],state+1)
+function _iterate_fragment(f::FragmentVector{T}, block::Int, local::Int) where T
+    while block <= length(f.data)
+        blk = f.data[block]
+        if local <= length(blk)
+            return (blk[local], (block, local + 1))
+        else
+            block += 1
+            local = 1
+        end
+    end
+    return nothing
 end
 
 struct FragIter{T}
