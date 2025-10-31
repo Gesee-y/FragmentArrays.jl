@@ -256,16 +256,34 @@ function Base.length(f::FragmentVector)
 	return l
 end
 
-function prealloc_range(f::FragmentVector{T}, r::UnitRange) where T
-	blockid = max(_search_index(f.map, r[begin]) >> 32, 1)
-	last = r[end]
-	map = f.map
+function prealloc_range!(f::FragmentVector{T}, r::UnitRange{Int}) where T
+    map = f.map
+    lmap = length(map)
 
-	if last > length(map)
-		resize!(map, last)
-	end
-	map[r] .= blockid << 32 | r[begin]-1
-	insert!(f.data, blockid, Vector{T}(undef, length(r)))
+    rstart = max(first(r), 1)
+    rend = min(last(r), lmap)
+
+    while rstart <= rend && map[rstart] != 0
+        rstart += 1
+    end
+    while rstart <= rend && map[rend] != 0
+        rend -= 1
+    end
+
+    if rstart > rend
+        return rstart:rstart-1  
+    end
+
+    new_block = Vector{T}(undef, rend - rstart + 1)
+    push!(f.data, new_block)
+    blockid = length(f.data)
+
+    mask = (UInt64(blockid) << 32) | UInt64(rstart - 1)
+    @inbounds for i in rstart:rend
+        map[i] = mask
+    end
+
+    return rstart:rend
 end
 
 function get_block(f::FragmentVector{T}, i) where T
