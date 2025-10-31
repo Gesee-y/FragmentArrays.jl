@@ -53,28 +53,37 @@ function Base.iterate(f::FragmentVector, state)
 	return (f.data[id][state],state+1)
 end
 
-function get_iterator(f::FragmentVector{T}, vec) where T
-	sort!(vec)
-	l = length(f)
-	l2 = length(vec)
+struct FragIter{T}
+    block::Vector{T}
+    range::UnitRange{Int}
+end
 
-	n = 0
-	i = 1
-	result = Tuple{Vector{T}, Vector{Int}}[]
+function get_iterator(f::FragmentVector{T}, vec::Vector{Int}) where T
+    @inbounds begin
+        if !issorted(vec)
+            sort!(vec)
+        end
 
-	while i < l && i < l2
-		iter = Int[]
-		s = vec[i]
-		block = get_block(f, s)
-		off = get_offset(f, s)
+        result = Vector{FragIter{T}}()
+        l2 = length(vec)
+        i = 1
 
-		while i <= l2 && vec[i] - s < length(block)
-			push!(iter, vec[i] - off)
-			i += 1
-		end
+        while i <= l2
+            s = vec[i]
+            block = get_block(f, s)
+            off = get_offset(f, s)
+            start = vec[i] - off
+            lenb = length(block)
+            i += 1
 
-		push!(result, (block, iter))
-	end
+            while i <= l2 && vec[i] - off < lenb
+                i += 1
+            end
 
-	return result
+            stop = vec[i-1] - off
+            push!(result, FragIter(block, start:stop))
+        end
+
+        return result
+    end
 end
