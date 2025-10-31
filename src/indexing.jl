@@ -2,7 +2,7 @@
 ################################################################# INDEXING #####################################################################
 ################################################################################################################################################
 
-export get_iterator
+export get_iterator, get_iterator_range, prealloc_range
 
 const OFFSET_MASK = ((1 << 32)-1)
 const BLOCK_MASK = ((1 << 32)-1) << 32
@@ -35,12 +35,22 @@ end
 Base.size(f::FragmentVector) = (length(f),)
 Base.size(f::FragmentVector, i) = size(f)[i]
 
+function Base.iterate(f::FragIterRange, state=1)
+    state > length(f.block) && return nothing
+    return ((f.block[state], f.range[state]), state+1)
+end
+function Base.iterate(f::FragIter, state=1)
+    state > length(f.block) && return nothing
+    return ((f.block[state], f.ids[state]), state+1)
+end
+
 function Base.iterate(f::FragmentVector{T}) where T
     return _iterate_fragment(f, 1, 1)
 end
 
-function Base.iterate(f::FragmentVector{T}, block::Int, local::Int=1) where T
-    return _iterate_fragment(f, block, local)
+function Base.iterate(f::FragmentVector{T}, state) where T
+    block, loc = state
+    return _iterate_fragment(f, block, loc)
 end
 
 function _iterate_fragment(f::FragmentVector{T}, block::Int, loc::Int) where T
@@ -63,24 +73,31 @@ function get_iterator_range(f::FragmentVector{T}, vec; shouldsort=false) where T
             sort!(vec)
         end
 
-        result = Vector{FragIter{T}}()
+        result = FragIterRange{T}()
         l2 = length(vec)
         i = 1
 
         while i <= l2
             s = vec[i]
-            block = get_block(f, s)
-            off = get_offset(f, s)
-            start = vec[i] - off
-            lenb = length(block)
-            i += 1
+            m = f.map[s]
 
-            while i <= l2 && vec[i] - off < lenb
+            if m != 0
+                block = get_block(f, s)
+                off = get_offset(f, s)
+                start = vec[i] - off
+                lenb = length(block)
+                i += 1
+
+                while i <= l2 && vec[i] - off <= lenb
+                    i += 1
+                end
+
+                stop = vec[i-1] - off
+                push!(result.block, block)
+                push!(result.range, start:stop)
+            else
                 i += 1
             end
-
-            stop = vec[i-1] - off
-            push!(result, FragIterRange{T}(block, start:stop))
         end
 
         return result

@@ -1,7 +1,9 @@
 include(joinpath("..", "src", "FragmentArrays.jl"))
 
 using .FragmentArrays
-using BenchmarkTools
+
+include("tests.jl")
+#=using BenchmarkTools
 
 a = FragmentVector{Int}(undef, 10)
 
@@ -36,3 +38,4 @@ println(a.map)
 println(a.data)
 println(a.offset)
 println(a.map)
+=#
