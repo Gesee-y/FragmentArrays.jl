@@ -24,12 +24,11 @@ function Base.setindex!(f::FragmentVector, v, i)
 	@boundscheck 1 <= i <= length(map)
 	
 	mask = map[i]
-	blockid, offset = (mask) >> 32, mask & OFFSET_MASK
-	
 	if iszero(mask)
 		return insert!(f, i, v)
 	end
 
+    blockid, offset = (mask) >> 32, mask & OFFSET_MASK
 	f.data[blockid][i - offset] = v
 end
 
@@ -44,27 +43,23 @@ function Base.iterate(f::FragmentVector{T}, block::Int, local::Int=1) where T
     return _iterate_fragment(f, block, local)
 end
 
-function _iterate_fragment(f::FragmentVector{T}, block::Int, local::Int) where T
+function _iterate_fragment(f::FragmentVector{T}, block::Int, loc::Int) where T
     while block <= length(f.data)
         blk = f.data[block]
-        if local <= length(blk)
-            return (blk[local], (block, local + 1))
+        if loc <= length(blk)
+            return (blk[loc], (block, loc + 1))
         else
             block += 1
-            local = 1
+            loc = 1
         end
     end
     return nothing
 end
 
-struct FragIter{T}
-    block::Vector{T}
-    range::UnitRange{Int}
-end
 
-function get_iterator(f::FragmentVector{T}, vec::Vector{Int}) where T
+function get_iterator_range(f::FragmentVector{T}, vec; shouldsort=false) where T
     @inbounds begin
-        if !issorted(vec)
+        if shouldsort
             sort!(vec)
         end
 
@@ -85,9 +80,36 @@ function get_iterator(f::FragmentVector{T}, vec::Vector{Int}) where T
             end
 
             stop = vec[i-1] - off
-            push!(result, FragIter(block, start:stop))
+            push!(result, FragIterRange{T}(block, start:stop))
         end
 
         return result
     end
+end
+
+function get_iterator(f::FragmentVector{T}, vec; shouldsort=false) where T
+    shouldsort && sort!(vec)
+    l = length(f)
+    l2 = length(vec)
+
+    n = 0
+    i = 1
+    result = Tuple{Vector{T}, Vector{Int}}[]
+
+    while i <= l2
+        iter = Int[]
+        s = vec[i]
+        si = i
+        block = get_block(f, s)
+        off = get_offset(f, s)
+
+        while i <= l2 && vec[i] - s < length(block)
+            i += 1
+        end
+
+        append!(iter, vec[si:i] .- off)
+        push!(result, FragIter{T}(block, iter))
+    end
+
+    return result
 end

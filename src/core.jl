@@ -26,3 +26,14 @@ mutable struct FragmentVector{T} <: AbstractVector{T}
 	FragmentVector(args::T...) where T = FragmentVector{T}(args...)
 	FragmentVector{T}(args...) where T = FragmentVector{T}(convert.(T, args))
 end
+
+
+struct FragIterRange{T}
+    block::Vector{T}
+    range::UnitRange{Int}
+end
+
+struct FragIter{T}
+	block::Vector{T}
+	ids::Vector{Int}
+end
