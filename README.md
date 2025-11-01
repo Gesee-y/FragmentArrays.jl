@@ -66,8 +66,14 @@ julia> for (block, ids) in iter
 4
 ```
 
-Getting data is an O(1) operation. The index first pass through a map to know in which fragment it belongs to, then is substrated by the fragment starting position to in the index in that fragment.
-Benchmarks shows 2.7ns to access an element in a vector vs 3.1ns to access it in a FragmentVector)
+## Performance trade-offs
+
+| Operation              | Complexity | Notes |
+|------------------------|-------------|-------|
+| Random access          | O(1)        | A bit slower than `Vector` due to indirection `2.7 ns` vs `3.1 ns`|
+| Iteration              | O(n)        | Faster when iterating contiguous ranges |
+| Insertion/Deletion     | ~O(1) amortized | No large-scale data shifting |
+| Memory usage           | Lower       | Freed fragments release memory immediately |
 
 ## Use cases 
 
