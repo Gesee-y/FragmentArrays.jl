@@ -43,7 +43,7 @@ julia> print(a.data)
 [[1,2,3]]
 ```
 
-you can also use `prealloc_range` to allocate a new block of data
+you can also use `prealloc_range` to allocate a new block of data so later insertion won't allocate new structures.
 
 Unlike sparse set, you can create iterators to efficiently iterate on a specific set of index.
 
@@ -64,16 +64,16 @@ julia> for (block, ids) in iter
 ```
 
 Getting data is an O(1) operation. The index first pass through a map to know in which fragment it belongs to, then is substrated by the fragment starting position to in the index in that fragment.
-Benchmarks shows 2.7ns to access an element in a vector vs 3.9ns to access it in a FragmentVector)
+Benchmarks shows 2.7ns to access an element in a vector vs 3.1ns to access it in a FragmentVector)
 
 ## Use cases 
 
 This package is particularly suitable when you need:
 
-- **Sparcity and efficient iterations**
-- **Groups as intervals**: Group of data can be made as a range which will have his own block and can be more efficiently iterated
+- **Sparse but efficient contiguous iterations**
+- **Data groups as ranges**: Group of data can be made as a range which will have his own block and can be more efficiently iterated
 - **Multiple arrays** but stable indexing between them
-- **Fast arrays insertion/deletion**
+- **Fast array's element insertion/deletion**
 
 ## License
 
