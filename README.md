@@ -1,5 +1,8 @@
 # FragmentArrays.jl
 
+![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Like sparse arrays but fragment into multiple arrays at deletion.
 
 ## Installation
