@@ -66,6 +66,20 @@ julia> for (block, ids) in iter
 4
 ```
 
+## How it works
+
+A `FragmentVector` is made like this:
+
+```julia
+mutable struct FragmentVector{T} <: AbstractVector{T}
+    data::Vector{Vector{T}
+    map::Vector{UInt64}
+end
+```
+
+When you initialize a new FragmentVector like this `a = FragmentVector{Int}(undef, n)`, the internal `map` is intialized to size `n`. 
+Then when you do `a[i] = 3`, it will create a new bloc and push it to `data`, let `j` be the index of that block, then at the index 3 in the `map` it will put `(j << 32) | i-1` which is enough to instantly retrieve an element.
+
 ## Performance trade-offs
 
 | Operation              | Complexity | Notes |
