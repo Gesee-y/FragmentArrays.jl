@@ -2,7 +2,7 @@
 ###################################################### OPERATIONS ###################################################
 #####################################################################################################################
 
-export prealloc_range!, get_block, get_offset, numelt
+export prealloc_range!, get_block, get_offset, numelt, get_block_and_offset
 
 Base.length(f::FragmentVector) = length(f.map)
 function Base.push!(f::FragmentVector, v)
@@ -195,6 +195,7 @@ function Base.resize!(f::FragmentVector, n)
 		end
 	end
 end
+Base.isempty(f::FragmentVector) = isempty(f.map)
 
 function numelt(f::FragmentVector)
 	l = 0
@@ -207,20 +208,53 @@ end
 
 function prealloc_range!(f::FragmentVector{T}, r::UnitRange{Int}) where T
     map = f.map
+    length(map) < r[end] && resize!(f, r[end])
+    length(r) < 1 && return r
     lmap = length(map)
 
     rstart = max(first(r), 1)
     rend = min(last(r), lmap)
+    rmask, lmask = map[rstart], map[rend]
 
-    while rstart <= rend && map[rstart] != 0
+    while rstart <= rend && rmask != 0
         rstart += 1
+        rmask = map[rstart]
     end
-    while rstart <= rend && map[rend] != 0
+    while rstart <= rend && lmask != 0
         rend -= 1
+        lmask = map[rend]
     end
 
     if rstart > rend
         return rstart:rstart-1  
+    end
+
+    rmask, lmask = map[max(rstart-1, 1)], map[min(rend+1, lmap)]
+
+    if rmask != 0 && lmask != 0
+    	bid, off = decode_mask(rmask)
+    	rid, _ = decode_mask(lmask)
+    	rblk = f.data[bid]
+    	resize!(rblk, rend-off)
+    	append!(rblk, f.data[rid])
+    	_deleteat!(f.data, rid)
+    	map[off+1:off+length(rblk)] .= rmask
+    	return rstart:rend
+    elseif rmask != 0
+    	bid, off = decode_mask(rmask)
+    	rblk = f.data[bid]
+    	resize!(rblk, rend-off)
+    	map[off+1:off+length(rblk)] .= rmask
+    	return rstart:rend
+    elseif lmask != 0
+    	v = Vector{T}(undef, rend-rstart+1)
+    	bid, off = decode_mask(lmask)
+    	lblk = f.data[bid]
+    	append!(v, lblk)
+    	f.data[bid] = v
+    	lmask = make_mask(bid, rstart-1)
+    	map[rstart:rend] .= lmask
+    	return rstart:rend
     end
 
     new_block = Vector{T}(undef, rend - rstart + 1)
@@ -242,6 +276,10 @@ end
 function get_offset(f::FragmentVector, i)
 	id = f.map[i]
 	return id & OFFSET_MASK
+end
+function get_block_and_offset(f::FragmentVector, i)
+	id = f.map[i]
+	return f.data[(id >> 32)], id & OFFSET_MASK
 end
 
 ###################################################### HELPERS ######################################################

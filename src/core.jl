@@ -40,4 +40,30 @@ end
 struct FragIter{T}
 	block::Vector{T}
 	ids::Vector{Vector{Int}}
+
+	## Constructors
+
+	FragIter{T}() where T = new{T}(T[], Vector{Int}[])
 end
+
+function Base.show(io::IO, f::FragmentVector)
+    print(io, "[")
+    map = f.map
+    n = length(map)
+    for i in 1:n
+        mask = map[i]
+        if iszero(mask)
+            print(io, ".")
+        else
+            blockid = mask >> 32
+            offset  = mask & ((1 << 32) - 1)
+            val = f.data[blockid][i - offset]
+            print(io, val)
+        end
+        if i < n
+            print(io, ", ")
+        end
+    end
+    print(io, "]")
+end
+Base.show(f::FragmentVector) = show(stdout, f)

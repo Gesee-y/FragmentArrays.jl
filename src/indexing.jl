@@ -35,6 +35,11 @@ end
 Base.size(f::FragmentVector) = (length(f),)
 Base.size(f::FragmentVector, i) = size(f)[i]
 
+Base.eachindex(f::FragIter) = eachindex(f.block)
+Base.eachindex(f::FragIterRange) = eachindex(f.block)
+Base.getindex(f::FragIter, i) = (f.block[i], f.ids[i])
+Base.getindex(f::FragIter{T}, i) where T <: Tuple = (f.block[i]..., f.ids[i])
+Base.getindex(f::FragIterRange, i) = (f.block[i], f.range[i])
 function Base.iterate(f::FragIterRange, state=1)
     state > length(f.block) && return nothing
     return ((f.block[state], f.range[state]), state+1)
@@ -42,6 +47,10 @@ end
 function Base.iterate(f::FragIter, state=1)
     state > length(f.block) && return nothing
     return ((f.block[state], f.ids[state]), state+1)
+end
+function Base.iterate(f::FragIter{T}, state=1) where T <: Tuple
+    state > length(f.block) && return nothing
+    return ((f.block[state]..., f.ids[state]), state+1)
 end
 
 function Base.iterate(f::FragmentVector{T}) where T
@@ -111,22 +120,55 @@ function get_iterator(f::FragmentVector{T}, vec; shouldsort=false) where T
 
     n = 0
     i = 1
-    result = Tuple{Vector{T}, Vector{Int}}[]
+    result = FragIter{Vector{T}}()
 
-    while i <= l2
-        iter = Int[]
+    @inbounds while i <= l2
         s = vec[i]
         si = i
         block = get_block(f, s)
         off = get_offset(f, s)
 
-        while i <= l2 && vec[i] - s < length(block)
+        while i <= l2 && vec[i] - off <= length(block)
             i += 1
         end
 
-        append!(iter, vec[si:i] .- off)
-        push!(result, FragIter{T}(block, iter))
+        push!(result.block, block)
+        push!(result.ids, vec[si:i-1] .- off)
     end
 
     return result
 end
+
+function get_iterator(fs::T, vec; shouldsort=false) where T <: Tuple
+    shouldsort && sort!(vec)
+    l2 = length(vec)
+
+    n = 0
+    i = 1
+    result = FragIter{_to_vec_type(fs)}()
+
+    @inbounds while i <= l2
+        s = vec[i]
+        si = i
+        fix = Base.Fix2(get_block, s)
+        blocks = fix.(fs)
+        l = length(blocks[begin])
+        off = get_offset(fs[begin], s)
+
+        while i <= l2 && vec[i] - off <= l
+            i += 1
+        end
+
+        push!(result.block, blocks)
+        push!(result.ids, vec[si:i-1] .- off)
+    end
+
+    return result
+end
+
+function _to_vec_type(::T) where T
+
+    return Tuple{_to_vec.(T.parameters)...}
+end
+
+_to_vec(::Type{<:FragmentVector{T}}) where T = Vector{T}
