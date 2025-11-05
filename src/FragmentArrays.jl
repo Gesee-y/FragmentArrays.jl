@@ -12,6 +12,8 @@ module FragmentArrays
 
 ## Core data structures
 include("core.jl")
+## Layout interface
+include("layout.jl")
 ## Indexing
 include("indexing.jl")
 ## Common operations

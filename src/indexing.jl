@@ -113,14 +113,14 @@ function get_iterator_range(f::FragmentVector{T}, vec; shouldsort=false) where T
     end
 end
 
-function get_iterator(f::FragmentVector{T}, vec; shouldsort=false) where T
+function get_iterator(f::FragmentVector{T, C}, vec; shouldsort=false) where {T, C}
     shouldsort && sort!(vec)
     l = length(f)
     l2 = length(vec)
 
     n = 0
     i = 1
-    result = FragIter{Vector{T}}()
+    result = FragIter{C}()
 
     @inbounds while i <= l2
         s = vec[i]
@@ -171,4 +171,4 @@ function _to_vec_type(::T) where T
     return Tuple{_to_vec.(T.parameters)...}
 end
 
-_to_vec(::Type{<:FragmentVector{T}}) where T = Vector{T}
+_to_vec(::Type{<:FragmentVector{T, C}}) where {T, C} = C

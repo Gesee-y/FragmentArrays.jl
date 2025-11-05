@@ -206,7 +206,7 @@ function numelt(f::FragmentVector)
 	return l
 end
 
-function prealloc_range!(f::FragmentVector{T}, r::UnitRange{Int}) where T
+function prealloc_range!(f::FragmentVector{T, C}, r::UnitRange{Int}) where {T, C}
     map = f.map
     length(map) < r[end] && resize!(f, r[end])
     length(r) < 1 && return r
@@ -247,7 +247,7 @@ function prealloc_range!(f::FragmentVector{T}, r::UnitRange{Int}) where T
     	map[off+1:off+length(rblk)] .= rmask
     	return rstart:rend
     elseif lmask != 0
-    	v = Vector{T}(undef, rend-rstart+1)
+    	v = C(undef, rend-rstart+1)
     	bid, off = decode_mask(lmask)
     	lblk = f.data[bid]
     	append!(v, lblk)
@@ -257,7 +257,7 @@ function prealloc_range!(f::FragmentVector{T}, r::UnitRange{Int}) where T
     	return rstart:rend
     end
 
-    new_block = Vector{T}(undef, rend - rstart + 1)
+    new_block = C(undef, rend - rstart + 1)
     push!(f.data, new_block)
     blockid = length(f.data)
 
