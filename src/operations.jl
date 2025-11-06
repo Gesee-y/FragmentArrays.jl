@@ -4,35 +4,17 @@
 
 export prealloc_range!, get_block, get_offset, numelt, get_block_and_offset
 
-Base.length(f::FragmentVector) = length(f.map)
+Base.length(f::FragmentVector) = isempty(f.data) ? 0 : f.offset[end]+length(f.data[end])
 function Base.push!(f::FragmentVector, v)
     id = length(f.data)
-	
-	push!(f.map, id)
 	push!(f.data[id], v)
+	f.capacity += 1
 end
 
 function Base.append!(f::FragmentVector, v)
 	id = length(f.data)
-	map = f.map
-
-	m = 0
-	while iszero(map[m])
-		m -= 1
-	end
-
-    mask = map[m]
-	id, offset = (mask >> 32) & BLOCK_MASK, mask & offset
-
-	ls = length(map)
-	le = _length(v)
-	
-	resize!(map, ls+le)
-    for i in ls+1:ls+le
-    	map[i] = id << 32 | offset
-    end
-
 	append!(f.data[id], v)
+	f.capacity += length(v)
 end
 
 @inline function decode_mask(mask::UInt64)
@@ -46,81 +28,64 @@ end
 end
 
 function _bump_block_starts!(map::Vector{UInt64}, from_index::Int)
-    
-    @inbounds for k in 1:length(map)
-        m = map[k]
-        if m != 0
-            
-            s = Int(m & OFFSET_MASK)
-            if s >= from_index
-                map[k] += 1
-            end
-        end
-    end
-    return
+    @inbounds offs[idx+1:end] .+= 1
+   
 end
 
-function Base.insert!(f::FragmentVector{T}, i::Int, v::T) where T
+function Base.insert!(f::FragmentVector{T,L}, i::Int, v::T) where {T,L}
+	idx = _new_block_idx(f.offset, i)
+
+	if iszero(idx)
+		pushfirst!(f.data, L(v))
+		pushfirst!(f.offset, i-1)
+
+		return
+	end
+
+	blk, offs = f.data[idx], f.offset[idx]
     map = f.map
     lmap = length(map)
-    @boundscheck 1 <= i <= lmap || throw(BoundsError(f, i))
+    ldata = length(f.data)
 
-    mask = map[i]
-    if mask != 0
+    if _inside_block(blk, offs, i)
         
-        bid, bstart = decode_mask(mask)
-        lcl = i - bstart
         @inbounds begin
-            insert!(f.data[bid], lcl, v)
-            insert!(map, i, mask)    
-            _bump_block_starts!(map, i)
-            
+            lcl = i-offs
+            insert!(blk, lcl, v) 
+            @inbounds f.offset[idx+1:end] .+= 1
         end
         return
     end
 
-    left_exists = (i > 1 && map[i-1] != 0)
-    right_exists = (i < lmap && map[i+1] != 0)
-
+    left_exists = (idx >= 1 && _inside_block(f.data[idx], f.offset[idx], i-1))
+    right_exists = (idx+1 <= ldata && _inside_block(f.data[idx+1], f.offset[idx+1], i+1))
+    
     if left_exists && right_exists
         
-        lmask = map[i-1]; rmask = map[i+1]
-        lbid, lstart = decode_mask(lmask)
-        rbid, rstart = decode_mask(rmask)
+        lbid, lstart = idx, f.offset[idx]
+        rbid, rstart = idx+1, f.offset[idx+1]
         
         left_block = f.data[lbid]
         right_block = f.data[rbid]
 
-        map[i:i+length(right_block)] .= lmask
         push!(left_block, v)
 
         _fuse_block!(left_block, right_block)
         _deleteat!(f.data, rbid)
-
-        for j in 1:length(map)
-            m = map[j]
-            bid, m = decode_mask(m)
-            map[j] -= (1 << 32)*(bid >= rbid)
-        end
-
+        _deleteat!(f.offset, rbid)
     elseif left_exists
-        lmask = map[i-1]
-        lbid, lstart = decode_mask(lmask)
-        map[i] = lmask
+    	lbid = idx
         push!(f.data[lbid], v)
-
     elseif right_exists
-        rmask = map[i+1]
-        map[i] = rmask
-        rbid, rstart = decode_mask(rmask)
+        rbid, rstart = idx+1, f.offset[idx+1]
         right_block = f.data[rbid]
         pushfirst!(right_block, v)
-        map[i:i+length(right_block)-1] .-= 1
+        @inbounds f.offset[idx+1] -= 1
 
     else
         nbid = length(f.data) + 1
-        push!(f.data, Vector{T}([v]))
-        map[i] = make_mask(nbid, i - 1)
+        insert!(f.data, idx+1, L(v))
+        insert!(f.offset, idx+1, i-1)
         return
     end
 end
@@ -131,71 +96,57 @@ function Base.pop!(f::FragmentVector)
 
 	if isempty(f.data[end])
 		pop!(f.data)
+		pop!(f.offset)
 	end
 
 	return r
 end
 
-function Base.deleteat!(f::FragmentVector, i)
-	map = f.map
-	mask = map[i]
-    data = f.data
-	if iszero(mask)
+function Base.deleteat!(f::FragmentVector{T,L}, i) where {T, L}
+	id = _new_block_idx(f.offset, i)
+	if iszero(id) || !_inside_block(f.data[id], f.offset[id], i)
 		return 
 	end
 
-	id, offset = decode_mask(mask)
-    blk = data[id]
-	map[i] = 0
+
+	offset = f.offset[id]
+    blk = f.data[id]
 
 	idx = i - offset
 
 	if idx == 1
-		f.data[id] = blk[2:end]
-        map[i+1:i+length(blk)-1] .+= 1
-	elseif idx == length(blk)
+		f.data[id] = L(blk[2:end]...)
+		f.offset[id] += 1
+    elseif idx == length(blk)
 		pop!(blk)
 	else
 		vr = blk[idx+1:end]
 		resize!(blk, idx-1)
-		push!(data, vr)
-
-        new_mask = make_mask(length(data), i)
-
-		map[i+1:i+length(vr)] .= new_mask
+		insert!(f.data, id+1, L(vr...))
+		insert!(f.offset, id+1, i-1)
 	end
 
 	if isempty(f.data[id])
 		_deleteat!(f.data, id)
-
-		for j in 1:length(map)
-            m = map[j]
-            bid, m = decode_mask(m)
-			map[j] -= (1 << 32)*(bid >= id)
-		end
+		_deleteat!(f.offset, id)
 	end
 end
 
 function Base.resize!(f::FragmentVector, n)
 	l = length(f)
-	map = f.map
 
 	n == l && return
-	resize!(map, n)
 
-	if n > l
-		for i in l+1:n
-			map[i] = 0
-		end
-	else
-		j = length(f.offset)
+	if n <= l
 		while !isempty(f.offset) && f.offset[end] > n
 			pop!(f.offset)
 			pop!(f.data)
 		end
 	end
+
+	f.capacity = n
 end
-Base.isempty(f::FragmentVector) = isempty(f.map)
+Base.isempty(f::FragmentVector) = isempty(f.data)
 
 function numelt(f::FragmentVector)
 	l = 0
@@ -207,79 +158,88 @@ function numelt(f::FragmentVector)
 end
 
 function prealloc_range!(f::FragmentVector{T, C}, r::UnitRange{Int}) where {T, C}
-    map = f.map
-    length(map) < r[end] && resize!(f, r[end])
+    if isempty(f.data)
+    	push!(f.data, C(undef, length(r)))
+    	push!(f.offset, r[begin]-1)
+    	return r
+    end
     length(r) < 1 && return r
-    lmap = length(map)
+    lmap = length(f)
+    ldata = length(f.data)
 
     rstart = max(first(r), 1)
-    rend = min(last(r), lmap)
-    rmask, lmask = map[rstart], map[rend]
+    rend = last(r)
+    sid, eid = _new_block_idx(f.offset, rstart), _new_block_idx(f.offset, rend)+1
+    if eid - sid > 1
+    	rend = f.offset[sid+1]
+    	eid = sid+1
+    end
 
-    while rstart <= rend && rmask != 0
-        rstart += 1
-        rmask = map[rstart]
-    end
-    while rstart <= rend && lmask != 0
-        rend -= 1
-        lmask = map[rend]
-    end
+    if sid > 0
+    	lblk, loff = f.data[sid], f.offset[sid]
+	    while rstart <= rend && _inside_block(lblk, loff, rstart)
+	        rstart += 1
+	    end
+	end
+
+	if eid+1 <= length(f.data)
+		rblk, roff = f.data[eid], f.offset[eid]
+	    while rstart <= rend && _inside_block(rblk, roff, rend)
+	        rend -= 1
+	    end
+	end
 
     if rstart > rend
         return rstart:rstart-1  
     end
 
-    rmask, lmask = map[max(rstart-1, 1)], map[min(rend+1, lmap)]
+    lmask, rmask = _inside_block(f.data[max(1, sid)], f.offset[max(1, sid)], rstart-1), 
+        _inside_block(f.data[min(eid, ldata)], f.offset[min(eid, ldata)], rend+1)
 
-    if rmask != 0 && lmask != 0
-    	bid, off = decode_mask(rmask)
-    	rid, _ = decode_mask(lmask)
+    if rmask && lmask
+    	bid, off = sid, f.offset[sid]
+    	rid = eid
     	rblk = f.data[bid]
     	resize!(rblk, rend-off)
     	append!(rblk, f.data[rid])
     	_deleteat!(f.data, rid)
-    	map[off+1:off+length(rblk)] .= rmask
-    	return rstart:rend
-    elseif rmask != 0
-    	bid, off = decode_mask(rmask)
-    	rblk = f.data[bid]
-    	resize!(rblk, rend-off)
-    	map[off+1:off+length(rblk)] .= rmask
+    	_deleteat!(f.offset, rid)
     	return rstart:rend
     elseif lmask != 0
+    	bid, off = sid, f.offset[sid]
+    	rblk = f.data[bid]
+    	resize!(rblk, rend-off)
+    	return rstart:rend
+    elseif rmask != 0
     	v = C(undef, rend-rstart+1)
-    	bid, off = decode_mask(lmask)
+    	bid, off = eid, f.offset[eid]
     	lblk = f.data[bid]
     	append!(v, lblk)
     	f.data[bid] = v
-    	lmask = make_mask(bid, rstart-1)
-    	map[rstart:rend] .= lmask
+    	f.offset[bid] = rstart-1
+    	f.capacity += length(rstart:rend)
     	return rstart:rend
     end
 
     new_block = C(undef, rend - rstart + 1)
     push!(f.data, new_block)
     blockid = length(f.data)
-
-    mask = make_mask(blockid, rstart-1)
-    @inbounds for i in rstart:rend
-        map[i] = mask
-    end
+    f.capacity += length(rstart:rend)
 
     return rstart:rend
 end
 
 function get_block(f::FragmentVector{T}, i) where T
-	id = f.map[i]
-	return f.data[(id >> 32)]
+	id = _new_block_idx(f.offset, i)
+	return f.data[id]
 end
 function get_offset(f::FragmentVector, i)
-	id = f.map[i]
-	return id & OFFSET_MASK
+	id = _new_block_idx(f.offset, i)
+	return f.offset[id]
 end
 function get_block_and_offset(f::FragmentVector, i)
-	id = f.map[i]
-	return f.data[(id >> 32)], id & OFFSET_MASK
+	id = _new_block_idx(f.offset, i)
+	return f.data[id], f.offset[id]
 end
 
 ###################################################### HELPERS ######################################################
@@ -287,6 +247,13 @@ end
 _length(v::AbstractVector) = length(v)
 _length(v::Tuple) = length(v)
 _length(n) = 1
+
+function _inside_block(d, off, i)
+	return length(d) >= i-off > 0
+end
+function _outside_block(d, off, i)
+	return length(d) < i-off
+end
 
 function _fuse_block!(dest, src)
 	append!(dest, src)

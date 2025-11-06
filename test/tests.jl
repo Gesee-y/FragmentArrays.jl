@@ -5,7 +5,7 @@ function test_fragmentvector()
     @testset "Creation" begin
 
     f = FragmentVector{Int}(undef, 10)
-    @test length(f) == 10
+    @test length(f) == 0
 
     for i in 1:10
         f[i] = i*10
@@ -26,7 +26,7 @@ function test_fragmentvector()
 
     f[2] = 222
     f[8] = 888
-    
+
     f[3] = 333 
     f[7] = 777 
 
@@ -43,11 +43,13 @@ function test_fragmentvector()
 
     r = prealloc_range!(f, 4:6)
     @test r == 4:6
-    @test all(f.map[i] != 0 for i in r)
+    @test f.offset[begin] == 3
+    @test length(f.data[begin]) == 3
 
     r2 = prealloc_range!(f, 5:9)
     @test r2 == 7:9  # 5,6 déjà alloués
-    @test all(f.map[i] != 0 for i in r2)
+    @test f.offset[end] == 3
+    @test length(f.data[end][4:6]) == 3
 
     # Test iterate complet
     vals = collect(f)
@@ -76,9 +78,10 @@ function test_fragmentvector()
     
     rng = MersenneTwister(123)
     for _ in 1:1000
-        idx = rand(rng, 1:length(f))
+        idx = rand(rng, 1:1000)
         val = rand(rng, 1:10000)
         r = rand(rng)
+
         if r < 0.5
             deleteat!(f, idx)  # remove
         else

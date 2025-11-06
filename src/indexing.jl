@@ -7,29 +7,26 @@ export get_iterator, get_iterator_range, prealloc_range
 const OFFSET_MASK = ((1 << 32)-1)
 const BLOCK_MASK = ((1 << 32)-1) << 32
 
-function Base.getindex(f::FragmentVector{T}, i)::T where T
-	map = f.map
-	@boundscheck 1 <= i <= length(map) || throw(BoundsError(f, i))
-	
-	@inbounds mask = map[i]
-	@boundscheck iszero(mask) && error("The index [$i] doesn't exist or have been deleted")
+function Base.getindex(f::FragmentVector{T,C,I}, i)::T where {T, C<:AbstractFragmentLayout, I<:FragmentIndexingStyle}
+	idx = _new_block_idx(f.offset, i)
+    @boundscheck 0 < idx || throw(BoundsError(f, i))
 
-	blockid, j = (mask) >> 32, i - (mask & OFFSET_MASK)
+    blk, off = f.data[idx], f.offset[idx]
 	
-	return @inbounds f.data[blockid][j]
+	@boundscheck _outside_block(blk, off, i) && error("The index [$i] doesn't exist or have been deleted")
+
+	return @inbounds blk[i-off]
 end
 
-function Base.setindex!(f::FragmentVector, v, i)
-	map = f.map
-	@boundscheck 1 <= i <= length(map)
-	
-	mask = map[i]
-	if iszero(mask)
-		return insert!(f, i, v)
-	end
+function Base.setindex!(f::FragmentVector{T,C,I}, v, i) where {T, C<:AbstractFragmentLayout, I<:FragmentIndexingStyle}
+    idx = _new_block_idx(f.offset, i)
+    @boundscheck 0 < idx || return insert!(f, i, v)
 
-    blockid, offset = (mask) >> 32, mask & OFFSET_MASK
-	f.data[blockid][i - offset] = v
+    blk, off = f.data[idx], f.offset[idx]
+    
+    @boundscheck _outside_block(blk, off, i) && return insert!(f, i, v)
+
+    return @inbounds blk[i-off] = v
 end
 
 Base.size(f::FragmentVector) = (length(f),)
@@ -76,37 +73,33 @@ function _iterate_fragment(f::FragmentVector{T}, block::Int, loc::Int) where T
 end
 
 
-function get_iterator_range(f::FragmentVector{T}, vec; shouldsort=false) where T
-    @inbounds begin
+function get_iterator_range(f::FragmentVector{T,L}, vec; shouldsort=false) where {T,L}
+    begin
         if shouldsort
             sort!(vec)
         end
 
-        result = FragIterRange{T}()
+        result = FragIterRange{L}()
         l2 = length(vec)
         i = 1
+        rstart  = vec[begin]
+        rend = vec[end]
 
-        while i <= l2
-            s = vec[i]
-            m = f.map[s]
-
-            if m != 0
-                block = get_block(f, s)
-                off = get_offset(f, s)
-                start = vec[i] - off
-                lenb = length(block)
-                i += 1
-
-                while i <= l2 && vec[i] - off <= lenb
-                    i += 1
-                end
-
-                stop = vec[i-1] - off
-                push!(result.block, block)
-                push!(result.range, start:stop)
-            else
-                i += 1
+        while i <= rend
+            id = _new_block_idx(f.offset, rstart)
+            if iszero(id)
+                rstart += 1
+                continue
             end
+            blk, off = f.data[id], f.offset[id]
+            st, ed = max(off, rstart), min(rend, off+length(blk))
+            _outside_block(blk, off, st) && break
+
+            i += length(st:ed)+1
+            rstart = ed+1
+
+            push!(result.block, blk)
+            push!(result.range, st-off:ed-off)
         end
 
         return result
@@ -165,6 +158,26 @@ function get_iterator(fs::T, vec; shouldsort=false) where T <: Tuple
 
     return result
 end
+
+function _new_block_idx(arr, x) 
+    isempty(arr) && return 0
+    x < arr[begin] && return 0
+    ##x >= arr[end] && return length(arr)
+    lo = 1
+    hi = length(arr)
+    idx = 0
+    @inbounds while lo <= hi
+        mid = (lo + hi) >>> 1
+        v = arr[mid]
+        m = v < x
+        idx += (mid - idx) * m
+        lo  += (mid + 1 - lo) * m
+        hi  -= (hi - (mid - 1)) * (1 - m)
+    end
+    return idx
+end
+
+
 
 function _to_vec_type(::T) where T
 
