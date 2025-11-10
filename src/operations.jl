@@ -182,7 +182,7 @@ function prealloc_range!(f::FragmentVector{T, C}, r::UnitRange{Int}) where {T, C
 	    end
 	end
 
-	if eid+1 <= length(f.data)
+	if eid <= length(f.data)
 		rblk, roff = f.data[eid], f.offset[eid]
 	    while rstart <= rend && _inside_block(rblk, roff, rend)
 	        rend -= 1
@@ -217,14 +217,13 @@ function prealloc_range!(f::FragmentVector{T, C}, r::UnitRange{Int}) where {T, C
     	append!(v, lblk)
     	f.data[bid] = v
     	f.offset[bid] = rstart-1
-    	f.capacity += length(rstart:rend)
     	return rstart:rend
     end
 
     new_block = C(undef, rend - rstart + 1)
-    push!(f.data, new_block)
+    insert!(f.data, eid, new_block)
+    insert!(f.offset, eid, rstart-1)
     blockid = length(f.data)
-    f.capacity += length(rstart:rend)
 
     return rstart:rend
 end

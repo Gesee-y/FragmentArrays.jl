@@ -5,7 +5,7 @@
 export FragmentVector
 
 export AbstractFragmentVector, AbstractFragmentLayout, AbstractArrayLayout
-export DenseVectorLayout
+export VectorLayout, FragmentIndexingStyle
 
 abstract type AbstractFragmentVector{T, L} <: AbstractVector{T} end
 abstract type AbstractFragmentLayout end

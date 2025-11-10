@@ -2,12 +2,12 @@
 ################################################################# INDEXING #####################################################################
 ################################################################################################################################################
 
-export get_iterator, get_iterator_range, prealloc_range
+export get_iterator, get_iterator_range, prealloc_range, hasindex
 
 const OFFSET_MASK = ((1 << 32)-1)
 const BLOCK_MASK = ((1 << 32)-1) << 32
 
-function Base.getindex(f::FragmentVector{T,C,I}, i)::T where {T, C<:AbstractFragmentLayout, I<:FragmentIndexingStyle}
+function Base.getindex(f::FragmentVector{T,C,BinarySearchIndexing}, i)::T where {T, C<:AbstractFragmentLayout}
 	idx = _new_block_idx(f.offset, i)
     @boundscheck 0 < idx || throw(BoundsError(f, i))
 
@@ -18,13 +18,13 @@ function Base.getindex(f::FragmentVector{T,C,I}, i)::T where {T, C<:AbstractFrag
 	return @inbounds blk[i-off]
 end
 
-function Base.setindex!(f::FragmentVector{T,C,I}, v, i) where {T, C<:AbstractFragmentLayout, I<:FragmentIndexingStyle}
+function Base.setindex!(f::FragmentVector{T,C,BinarySearchIndexing}, v, i) where {T, C<:AbstractFragmentLayout}
     idx = _new_block_idx(f.offset, i)
-    @boundscheck 0 < idx || return insert!(f, i, v)
+    0 < idx || return insert!(f, i, v)
 
     blk, off = f.data[idx], f.offset[idx]
     
-    @boundscheck _outside_block(blk, off, i) && return insert!(f, i, v)
+    _outside_block(blk, off, i) && return insert!(f, i, v)
 
     return @inbounds blk[i-off] = v
 end
@@ -37,6 +37,10 @@ Base.eachindex(f::FragIterRange) = eachindex(f.block)
 Base.getindex(f::FragIter, i) = (f.block[i], f.ids[i])
 Base.getindex(f::FragIter{T}, i) where T <: Tuple = (f.block[i]..., f.ids[i])
 Base.getindex(f::FragIterRange, i) = (f.block[i], f.range[i])
+hasindex(f::FragmentVector, i) = begin
+    id = _new_block_idx(f.offset, i)
+    return _inside_block(f.data[id], f.offset[id], i)
+end
 function Base.iterate(f::FragIterRange, state=1)
     state > length(f.block) && return nothing
     return ((f.block[state], f.range[state]), state+1)
