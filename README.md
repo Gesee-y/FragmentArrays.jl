@@ -107,7 +107,6 @@ You can also create new indexing style. This way in your specific context, you c
 | Operation              | Complexity | Notes |
 |------------------------|-------------|-------|
 | Random access          | O(log n) n is the number of fragments      | A bit slower than `Vector` due to indirection `2.7 ns` vs `3.1 ns`|
-| Iteration              | O(n)      | Faster when iterating contiguous ranges |
 | Insertion/Deletion     | ~O(1) amortized | No large-scale data shifting |
 | Memory usage           | Low       | Freed fragments release memory immediately |
 
